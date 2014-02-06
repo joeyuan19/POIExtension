@@ -312,8 +312,6 @@ public class FileUtils {
 			if (!file.delete()) {
 				//Delete quietly
 				// 
-				
-				
 			}
 		}
 		return;
