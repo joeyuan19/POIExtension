@@ -310,8 +310,6 @@ public class FileUtils {
 	public static void deleteFile(File file) throws Exception {
 		if (file != null && file.exists()) {
 			if (!file.delete()) {
-				//Delete quietly
-				// 
 			}
 		}
 		return;
