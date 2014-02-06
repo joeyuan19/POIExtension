@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 test/*
 bin/**
 *.swp
@@ -44,3 +45,9 @@ bin/**
 ._*
 .Spotlight-V100
 .Trashes
+=======
+/bin
+.classpath
+.project
+.settings
+>>>>>>> 93d87609b1d96260d865d1ceaea1bcf986351af8
