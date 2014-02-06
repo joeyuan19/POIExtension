@@ -85,6 +85,7 @@ public class Helper {
 	public static int compareDates(String date1, String date2, String format) {
 		/*
 		// A Nice Regex Dream, maybe one day
+		 * CHANGE TO THE FILE
 		System.out.println("ORIGINAL: " + format);
 		String format_regex = format.replaceAll("(yy(yy)?)", "(?<year>$1)");
 		format_regex = format_regex.replaceAll("(mm(mm)?)","(?<month>$1)");
