@@ -91,7 +91,8 @@ public class Helper {
 		format_regex = format_regex.replaceAll("(mm(mm)?)","(?<month>$1)");
 		format_regex = format_regex.replaceAll("(d(d)?)", "(?<day>$1)");
 		format_regex = format_regex.replaceAll("(?<!\\<)d","\\\\\\\\d");
-		TESTING ON MAC SIDE
+		TESTING ON MAC SIDE  LOUD AND CLEAR
+		TESTING ON PC SIDE
 		format_regex = format_regex.replaceAll("(?<!\\<)m","\\\\\\\\d");
 		format_regex = format_regex.replaceAll("(?<!\\<)y","\\\\\\\\d");
 		System.out.println("FINAL: " + format_regex);
