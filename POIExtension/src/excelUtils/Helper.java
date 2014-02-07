@@ -92,7 +92,7 @@ public class Helper {
 		format_regex = format_regex.replaceAll("(d(d)?)", "(?<day>$1)");
 		format_regex = format_regex.replaceAll("(?<!\\<)d","\\\\\\\\d");
 		TESTING ON MAC SIDE  LOUD AND CLEAR
-		TESTING ON PC SIDE   OVER AND OUT
+		TESTING ON PC SIDE   OVER AND OUT AND CHANGE
 		format_regex = format_regex.replaceAll("(?<!\\<)m","\\\\\\\\d");
 		format_regex = format_regex.replaceAll("(?<!\\<)y","\\\\\\\\d");
 		System.out.println("FINAL: " + format_regex);
