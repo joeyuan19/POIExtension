@@ -1,13 +1,24 @@
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+ * Copyright 2013 Joseph Yuan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * 
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+
 package excelUtils;
 
-
-/*import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-*/
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -16,25 +27,11 @@ import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-
-//import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
-/*import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.SwingUtilities;*/
+import javax.swing.JOptionPane;
 
-
-//import org.apache.tika.Tika;
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * *
- * To do:
- * 		[ ] Implement file detection
- * 
- * 
- * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+import org.apache.tika.Tika;
 
 
 public class FileUtils {
@@ -155,29 +152,28 @@ public class FileUtils {
 	}
 	/* File location by REGEX */
 	public static File locateAndOpenFileRegex(String regex) {
-		return locateAndOpenFileRegex(regex,getPWD(),true,"Locate file matching pattern: " + regex);
+		return locateAndOpenFileRegex(regex,getPWD(),true,"Locate file matching pattern: " + regex,false);
 	}
 	public static File locateAndOpenFileRegex(String regex,boolean recursive) {
-		return locateAndOpenFileRegex(regex,getPWD(),recursive,"Locate file matching pattern: " + regex);
+		return locateAndOpenFileRegex(regex,getPWD(),recursive,"Locate file matching pattern: " + regex,false);
 	}
 	public static File locateAndOpenFileRegex(String regex,boolean recursive, String msg) {
-		return locateAndOpenFileRegex(regex,getPWD(),recursive,msg);
+		return locateAndOpenFileRegex(regex,getPWD(),recursive,msg,false);
 	}
 	public static File locateAndOpenFileRegex(String regex, String startingDirectory) {
-		return locateAndOpenFileRegex(regex,startingDirectory,true,"Locate file matching pattern: " + regex);
+		return locateAndOpenFileRegex(regex,startingDirectory,true,"Locate file matching pattern: " + regex,false);
 	}
 	public static File locateAndOpenFileRegex(String regex, String startingDirectory, String msg) {
-		return locateAndOpenFileRegex(regex,startingDirectory,true,msg);
+		return locateAndOpenFileRegex(regex,startingDirectory,true,msg,false);
 	}
 	public static File locateAndOpenFileRegex(String regex, String startingDirectory, boolean recursive) {
-		return locateAndOpenFileRegex(regex,startingDirectory,recursive,"Locate file matching pattern: " + regex);
+		return locateAndOpenFileRegex(regex,startingDirectory,recursive,"Locate file matching pattern: " + regex,false);
 	}
-	public static File locateAndOpenFileRegex(String regex, String startingDirectory, boolean recursive, String msg) {
+	public static File locateAndOpenFileRegex(String regex, String startingDirectory, boolean recursive, String msg, boolean offerOptOut) {
 		Pattern pattern = Pattern.compile(regex,Pattern.CASE_INSENSITIVE);
-		return locateAndOpenFileRegex(pattern,startingDirectory,recursive,msg,0);
+		return locateAndOpenFileRegex(pattern,startingDirectory,recursive,msg,0,offerOptOut);
 	}
-	public static File locateAndOpenFileRegex(Pattern pattern, String startingDirectory, boolean recursive, String msg,int level) {
-		System.out.println(pattern.toString());
+	public static File locateAndOpenFileRegex(Pattern pattern, String startingDirectory, boolean recursive, String msg,int level,boolean offerOptOut) {
 		File locatedFile = null;
 		String curFileName;
 		File dir = new File(startingDirectory);
@@ -200,18 +196,23 @@ public class FileUtils {
 				}
 			}
 		}
-		if (locatedFile == null && level == 0) {
-			locatedFile = manualLocate(startingDirectory,msg);
-		} else if (locatedFile == null) {
+		if (locatedFile == null) {
 			for (File curFile: subDirs) {
-				locatedFile = locateAndOpenFileRegex(pattern,curFile.getAbsolutePath(),recursive,msg,level+1);
+				locatedFile = locateAndOpenFileRegex(pattern,curFile.getAbsolutePath(),recursive,msg,level+1,offerOptOut);
 				if (locatedFile != null) {
 					break;
 				}
 			}
 		}
-		if (locatedFile == null) {
-			locatedFile = manualLocate(startingDirectory,msg);
+		if (locatedFile == null && level == 0) {
+			int manLocate = JOptionPane.YES_OPTION;
+			if (offerOptOut) {
+				Object[] objs = {"Locate","Skip"};
+				manLocate = JOptionPane.showOptionDialog(null, "This report was not found, would you like to locate the report manually?", "File Not Found", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, objs, objs[0]);
+			}
+			if (manLocate == JOptionPane.YES_OPTION) {
+				locatedFile = manualLocate(startingDirectory,msg);
+			}
 		}
 		return locatedFile;
 	}
@@ -290,29 +291,30 @@ public class FileUtils {
 		return detectFileType(file.getAbsolutePath());
 	}
 	public static String detectFileType(String path) throws IOException {
-		/*
-		Path p = FileSystems.getDefault().getPath(path);
-		String mimeType = Files.probeContentType(p);
-		 */
-		if (path.endsWith(".xls") || path.endsWith(".xlsx")){
-			return "application/vnd.ms-excel";
-		} else if (path.endsWith(".csv")){
-			return "text/csv";
-		}  else if (path.endsWith(".txt")){
-			return "text/plain";
-		}
-		return "unknown";
+		Tika tika = new Tika();
+		String type = tika.detect(path);
+		return type;
 
 	}
-
-
 	/* Ensured File deletion */
-	public static void deleteFile(File file) throws Exception {
+	public static boolean deleteFile(File file) {
+		boolean status = true;
 		if (file != null && file.exists()) {
-			if (!file.delete()) {
+			status = file.delete();
+			if (!status) {
+				try {
+					org.apache.commons.io.FileUtils.forceDelete(file);
+					status = true;
+				} catch (Exception e) {
+					e.printStackTrace();
+					status = false;
+				}
+				if (!status) {
+					status = org.apache.commons.io.FileUtils.deleteQuietly(file);
+				}	
 			}
 		}
-		return;
+		return status;
 	}
 
 	/* File path manipulation */
@@ -376,89 +378,12 @@ public class FileUtils {
 		}
 		FileInputStream in = new FileInputStream(path);
 		return in;
-
 	}
 
 	
 	
 	/* Main Method for tests */
 	public static void main(String args[]) {
-		/*
-		SwingUtilities.invokeLater(new Runnable() {
-			@Override
-			public void run() {
-				JFrame frame = new JFrame();
-				JPanel panel = new JPanel();
-				panel.setLayout(new BorderLayout());
-
-				JPanel subPanel = new JPanel();
-				GridBagConstraints c = new GridBagConstraints();
-				subPanel.setLayout(new GridBagLayout());
-
-				c.anchor = GridBagConstraints.NORTHWEST;
-
-				JLabel regex_label = new JLabel("Regex");
-				c.gridx = 0;
-				c.gridy = 0;
-				subPanel.add(regex_label,c);
-
-				final JTextField regex = new JTextField();
-				regex.setColumns(20);
-				c.gridx = 1;
-				subPanel.add(regex,c);
-
-				JLabel search_label = new JLabel("search");
-				c.gridx = 0;
-				c.gridy = 1;
-				subPanel.add(search_label,c);
-
-				final JTextField search = new JTextField();
-				search.setColumns(20);
-				c.gridx = 1;
-				subPanel.add(search,c);
-
-				panel.add(subPanel,BorderLayout.NORTH);
-
-				final JTextArea results = new JTextArea(50,50);
-				panel.add(results,BorderLayout.CENTER);
-
-				final JButton match = new JButton("Match");
-				match.addActionListener(
-						new ActionListener() {
-							@Override
-							public void actionPerformed(ActionEvent e) {
-								match.setEnabled(false);
-								SwingUtilities.invokeLater(new Runnable() {
-									@Override
-									public void run() {
-										try {
-											String regex_pattern = Helper.parseToRegex(regex.getText());
-											String search_pattern = search.getText();
-											Pattern p = Pattern.compile(regex_pattern);
-											Matcher m = p.matcher(search_pattern);
-											String result_str = "";
-											while (m.find()) {
-												result_str += m.group() + "\n";
-											}
-											results.setText(result_str);
-										} catch (Exception e) {
-											e.printStackTrace();
-										} finally {
-
-											match.setEnabled(true);
-										}
-
-									}
-								});
-							} 
-						}
-						);
-				panel.add(match,BorderLayout.SOUTH);
-				frame.add(panel);
-				frame.setMinimumSize(new Dimension(500,500));
-				frame.setVisible(true);	
-			}
-		});
-		*/
+		System.out.println();
 	}
 }

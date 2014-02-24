@@ -122,18 +122,19 @@ public class ExcelUtils {
 					Date originDate = origin.getDateCellValue();
 					try {
 						destination.setCellType(Cell.CELL_TYPE_NUMERIC);
-						destination.setCellValue((int)DateUtil.getExcelDate(originDate));
+						destination.setCellValue(DateUtil.getExcelDate(originDate));
 						//destination.setCellStyle(dateCellStyle);
 						break;
 					} catch (Exception e) {
 						e.printStackTrace();
-						String new_date = (new SimpleDateFormat("M/d/yyyy")).format(originDate);
+						String new_date = (new SimpleDateFormat("MM/dd/yyyy")).format(originDate);
 						destination.setCellType(Cell.CELL_TYPE_STRING);
 						destination.setCellValue(new_date);
 						break;
 					}
 				}
 				try {
+					destination.setCellType(Cell.CELL_TYPE_NUMERIC);
 					destination.setCellValue(origin.getNumericCellValue());
 				} catch (IllegalStateException e) {
 					/* Handle problematic numeric cell value */
@@ -1040,7 +1041,7 @@ public class ExcelUtils {
 		if (file == null) {return null;}
 		// if csv, create blank workbook and copy over values into workbook
 		Workbook wb = null;
-		boolean isCSV = false, isExcel = false, isText = false;
+		boolean isCSV = false, isExcel = false, isText = false, isHTML = false;
 
 		String type = "";
 		try {
@@ -1051,6 +1052,7 @@ public class ExcelUtils {
 		isExcel = type.equalsIgnoreCase("application/vnd.ms-excel") || type.equalsIgnoreCase("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 		isCSV = type.equalsIgnoreCase("text/csv");
 		isText = type.contains("text/plain");
+		isHTML = type.equalsIgnoreCase("text/html");
 		char delimChar, quotChar = '"';
 		if (isText || isCSV) {
 			if (isCSV) {
@@ -1081,7 +1083,7 @@ public class ExcelUtils {
 
 					try {
 						if (Helper.isNumeric(parsedCSVLine.get(j))) {
-							float val = Float.parseFloat(parsedCSVLine.get(j));
+							double val = Double.parseDouble(parsedCSVLine.get(j));
 							c.setCellType(Cell.CELL_TYPE_NUMERIC);
 							c.setCellValue(val);
 						} else if (Helper.isDate(parsedCSVLine.get(j))) {
@@ -1100,6 +1102,14 @@ public class ExcelUtils {
 				i++;
 			}
 			reader.close();
+		} else if (isHTML) {
+			BufferedReader reader = new BufferedReader(new FileReader(file));
+			String line, html = "";
+			while ((line = reader.readLine()) != null) {
+				html += line;
+			}
+			reader.close();
+			Helper.printHTML(Helper.parseHTML(html));
 		} else if (isExcel) {
 			wb = WorkbookFactory.create(file);
 		} else {
@@ -1108,7 +1118,7 @@ public class ExcelUtils {
 		return wb;
 	}
 	/* Handle saving workbook */
-	public static boolean saveWorkbook(Workbook wb, String filename, String filepath, boolean makeDirs, boolean overwrite) throws Exception {
+	public static boolean saveWorkbook(Workbook wb, String filename, String filepath, boolean makeDirs, boolean overwrite, boolean setForceFormulaRecalculation) throws Exception {
 		// if directories in the path do not exist, create them
 		if (makeDirs) {
 			( new File(filepath) ).mkdirs();
@@ -1116,6 +1126,9 @@ public class ExcelUtils {
 			if (!( new File(filepath) ).exists()) {
 				return false;
 			}
+		}
+		if (setForceFormulaRecalculation) {
+			wb.setForceFormulaRecalculation(true);
 		}
 		// Ensure the directory path ends with a separator
 		if (! filepath.endsWith(File.separator)) {
@@ -1140,6 +1153,5 @@ public class ExcelUtils {
 			throw e;
 		}
 	}
-	public static void main(String args[]) {
-	}
+	public static void main(String args[]) {}
 }
