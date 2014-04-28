@@ -25,6 +25,7 @@ import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Workbook;
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
@@ -277,21 +278,21 @@ public class Helper {
 		}
 		return -1;
 	}
-	private static int max(int a, int b) {
+	public static int max(int a, int b) {
 		if (a > b) {
 			return a;
 		} else {
 			return b;
 		}
 	}
-	private static int min(int a, int b) {
+	public static int min(int a, int b) {
 		if (a < b) {
 			return a;
 		} else {
 			return b;
 		}
 	}
-	private static int minPos(int a, int b) {
+	public static int minPos(int a, int b) {
 		if (a >= 0 && b >= 0) {
 			return min(a,b);
 		} else if (a >= 0 && b < 0) {
@@ -302,7 +303,7 @@ public class Helper {
 			return Integer.MAX_VALUE;
 		}
 	}
-	private static String safeSubstring(String str, int i, int f) {
+	public static String safeSubstring(String str, int i, int f) {
 		try {
 			i = max(0,i);
 			i = min(i,str.length());
@@ -314,14 +315,38 @@ public class Helper {
 			return "";
 		}
 	}
+	public static boolean isHTMLTag(HTMLNode n, String...tags) {
+		return isHTMLTag(n.tag,tags);
+	}
+	public static boolean isHTMLTag(String tag, String...tags) {
+		tag = tag.toLowerCase();
+		for (String tagItr : tags) {
+			if (tag.equalsIgnoreCase(tagItr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	public static ArrayList<HTMLNode> getChildren(HTMLNode n) {
+		ArrayList<HTMLNode> children = new ArrayList<HTMLNode>();
+		HTMLNode itr = n.firstChild;
+		while (itr != null) {
+			children.add(itr);
+			itr = itr.firstNeighbor;
+		}
+		return children;
+	}
+	private static boolean isSingleton(String tagName) {
+		return isHTMLTag(tagName,"meta","br","hr","link","area","base","col","command","input","embed","img","param","source");
+	}
 	public static HTMLNode parseHTML(String html) {
 		html = html.trim();
 		if (html.length() == 0) return null;
 		char c;
 		String tagName = "", childContent = "", attr = "", lastTag = "", content = "";
-		int n, lastIndex = 0, remainderIndex = -1;
+		int n, lastIndex = 0, remainderIndex = -1, contentStartIndex = -1, contentEndIndex = -1;
 		boolean isSingleton = false;
-		for (int i = 0, L = html.length(), depth = 0; i < L && i >= 0; lastIndex = i, i = html.indexOf('<',i+1)) {
+		for (int i = 0, L = html.length(), depth = 0; i < L && i >= 0; lastIndex = i, i = minPos(html.indexOf('<',i+1),L)) {
 			c = html.charAt(i);
 			if (i == 0) {
 				if (c != '<') {
@@ -329,7 +354,7 @@ public class Helper {
 					tagName = "text";
 					break;
 				} else {
-					if (i < L-1 && html.charAt(i+1) == '!') {
+					if (i < L-1 && html.charAt(i +1) == '!') {
 						// Comment
 						if (safeSubstring(html,i+2,(n=i+4)).equals("--")) {
 							// <!-- ...comment... -->
@@ -344,23 +369,17 @@ public class Helper {
 					}
 					tagName = safeSubstring(html,i+1,(n = minPos(html.indexOf('>', i+1),html.indexOf(' ',i+1)))).toLowerCase();
 					attr = safeSubstring(html,n,(n = html.indexOf('>',n)));
-					i = n+1;
+					contentStartIndex = n+1;
 					// Check for singleton
-					isSingleton = tagName.equals("meta") || tagName.equals("br") ||
-							tagName.equals("hr") || tagName.equals("link") || tagName.equals("area") ||
-							tagName.equals("base") || tagName.equals("col") || tagName.equals("command") ||
-							tagName.equals("input") || tagName.equals("embed") || tagName.equals("img") ||
-							tagName.equals("param")  || tagName.equals("source");
+					isSingleton = isSingleton(tagName);
 					if (isSingleton) {
+						contentStartIndex = -1;
 						remainderIndex = html.indexOf('>') + 1;
 						break;
 					}
 					depth++;
 				}
 			} else {
-				if (lastIndex > 0) {
-					childContent += safeSubstring(html,lastIndex,i);
-				}
 				if (c == '<') {
 					if (i < L-1 && html.charAt(i+1) == '/') {
 						lastTag = safeSubstring(html,i+2,(n = html.indexOf('>', i+2))).toLowerCase();
@@ -368,6 +387,7 @@ public class Helper {
 							depth--;
 						}
 						if (depth <= 0) {
+							contentEndIndex = i;
 							remainderIndex = n+1;
 							if (lastIndex > 0) {
 								childContent += safeSubstring(html,lastIndex,i);
@@ -375,27 +395,168 @@ public class Helper {
 							break;
 						}
 					} else {
-						if (safeSubstring(html,i+1,i+4).equals("!--")) { // Comment
+						if (safeSubstring(html,i+1,(n=i+4)).equals("!")) { // Comment
 							lastTag = "comment";
-							n = html.indexOf("-->",i+4) + "-->".length();
+							// Comment
+							if (safeSubstring(html,i+2,(n=i+4)).equals("--")) {
+								// <!-- ...comment... -->
+								n = html.indexOf("-->",n) + "-->".length();
+							} else {
+								// <!DOCTYPE html>
+								n = html.indexOf('>',i)+1;
+							}
 						} else {
 							lastTag = safeSubstring(html,i+1,(n = min(html.indexOf('>', i+1),html.indexOf(' ',i+1)))).toLowerCase();
 						}
 						if (lastTag.equalsIgnoreCase(tagName)) {
 							depth++;
-						}
-						
+						}	
+					}
+					if (lastIndex > 0) {
+						childContent += safeSubstring(html,lastIndex,i);
 					}
 				}
 			}
 		}
 		String remainder = safeSubstring(html,remainderIndex,html.length());
+		if (contentStartIndex > 0) {
+			childContent = safeSubstring(html, contentStartIndex, minPos(contentEndIndex,html.length()));
+		}
 		content = childContent;
-		if (isSingleton || tagName.equalsIgnoreCase("comment") || tagName.equalsIgnoreCase("text")) {
+		if (isSingleton || isHTMLTag(tagName,"comment","text")) {
 			childContent = ""; // Have no children
 		}
-		System.out.println();
 		return new HTMLNode(parseHTML(childContent),parseHTML(remainder),tagName,attr,content);
+	}
+	public static HTMLNode searchHTML(HTMLNode n, String tag) {
+		return searchHTMLBreadthFirst(n,tag);
+	}
+	public static HTMLNode searchHTMLDepthFirst(HTMLNode n, String tag) {
+		HTMLNode itr;
+		if (n == null) return null;
+		else if (n.tag.equalsIgnoreCase(tag)) return n;
+		else if ((itr = searchHTML(n.firstChild,tag)) != null) return itr;
+		else if ((itr = searchHTML(n.firstNeighbor,tag)) != null) return itr;
+		else return null;
+	}
+	public static HTMLNode searchHTMLBreadthFirst(HTMLNode n, String tag) {
+		HTMLNode itr;
+		if (n == null) return null;
+		else if (n.tag.equalsIgnoreCase(tag)) return n;
+		else if ((itr = searchHTML(n.firstNeighbor,tag)) != null) return itr;
+		else if ((itr = searchHTML(n.firstChild,tag)) != null) return itr;
+		else return null;
+	}
+	public static ArrayList<ArrayList<String>> flattenHTML(HTMLNode node) {
+		ArrayList<ArrayList<String>> rows = new ArrayList<ArrayList<String>>();
+		if (node != null) {
+			if (node.tag.equalsIgnoreCase("body")) {
+				rows.addAll(flattenHTML(node.firstChild));
+			} else if (node.tag.equalsIgnoreCase("table")) {
+				rows.addAll(flattenHTML(node.firstChild));
+			} else if (node.tag.equalsIgnoreCase("tr")) {
+				rows = reconcileArrays(rows,flattenHTML(node.firstChild));
+				rows.addAll(flattenHTML(node.firstNeighbor));
+			} else if (node.tag.equalsIgnoreCase("td")) {
+				rows = reconcileArrays(rows,flattenHTML(node.firstChild));
+				rows = reconcileArrays(rows,flattenHTML(node.firstNeighbor));
+			} else {
+				ArrayList<String> row = new ArrayList<String>();
+				row.add(HTMLToString(node));
+				rows.add(row);
+			}
+			pp(rows);
+		}
+		return rows;
+	}
+	private static ArrayList<ArrayList<String>> reconcileArrays(ArrayList<ArrayList<String>> existingList, ArrayList<ArrayList<String>> additionList) {
+		if (existingList.size() == 0 && additionList.size() == 0) {
+			return existingList;
+		} else if (existingList.size() == 0) {
+			return additionList;
+		} else if (additionList.size() == 0) {
+			return existingList;
+		}
+		pp(existingList);
+		pp(additionList);
+		while (existingList.size() < additionList.size()) {
+			existingList.add(new ArrayList<String>());
+		}
+		int i, padDepth = getMaxEntryLength(existingList);
+		ArrayList<String> itr = null;
+		for (i = 0; i < existingList.size(); i++) {
+			itr = existingList.get(i);
+			while (itr.size() < padDepth) {
+				itr.add("");
+			}
+			existingList.get(i).addAll(additionList.get(i));
+		}
+		return existingList;
+	}
+	private static int getMaxEntryLength(ArrayList<ArrayList<String>> dArr) {
+		int i, depth = 0;
+		ArrayList<String> itr = null;
+		for (i = 0; i < dArr.size(); i++) {
+			itr = dArr.get(i);
+			depth = max(itr.size(),depth);
+		}
+		return depth;
+	}
+	private static int getLongestEntry(ArrayList<ArrayList<String>> dArr) {
+		int max = 0;
+		for (ArrayList<String> arr : dArr) {
+			max = max(getLongestEntry1D(arr),max);
+		}
+		return max;
+	}
+	private static int getLongestEntry1D(ArrayList<String> arr) {
+		int max = 0;
+		for (String s : arr) {
+			max = max(max,s.length());
+		}
+		return max;
+	}
+	private static void pp(ArrayList<ArrayList<String>> dArr) {
+		int depth = getMaxEntryLength(dArr), padTo = getLongestEntry(dArr);
+		System.out.println("Double Array of size " + dArr.size() + " " + depth);
+		ArrayList<String> itr;
+		for (int i = 0; i < dArr.size(); i++) {
+			itr = dArr.get(i);
+			System.out.print("|");
+			for (int j = 0; j < depth; j++) {
+				if (j < itr.size()) {
+					System.out.print(padString(itr.get(j),padTo));
+				} else {
+					System.out.print(padString("",padTo));
+				}
+				System.out.print("|");
+			}
+			System.out.println();
+		}
+	}
+	private static String padString(String str, int padTo) {
+		return padString(str,padTo-str.length(),' ',true);
+	}
+	private static String padString(String str, int padBy, char padChar,boolean padLeft) {
+		String padding = "";
+		for (int i = 0; i < padBy; i++) {
+			padding += padChar;
+		}
+		return padLeft ? padding + str : str + padding;
+	}
+	public static String HTMLToString(HTMLNode n) {
+		String buf = "";
+		if (n != null) {
+			if (n.tag.equalsIgnoreCase("text")) {
+				buf += n.content;
+			}
+			buf += HTMLToString(n.firstChild);
+			if (isHTMLTag(n,"tr","p","br")) {
+				buf += '\n';
+			}
+			buf += HTMLToString(n.firstNeighbor);
+		}
+		return buf;
 	}
 	public static void printHTML(HTMLNode n) {
 		printHTML(n, 0);
@@ -410,10 +571,10 @@ public class Helper {
 			if (n.firstChild != null) {
 				System.out.println();
 			}
-			if (n.firstChild != null) {
-				System.out.print('t'+prefix);
+			if (n.firstChild == null) { 
+				System.out.print(n.content);
 			}
-			System.out.print(n.content);
+
 			printHTML(n.firstChild,level+1);
 			if (n.firstChild != null) {
 				System.out.print(prefix);
@@ -427,16 +588,30 @@ public class Helper {
 		String s = str;
 		if (s.startsWith("-")) { s = s.substring(1);}
 		char c;
-		int i,L = s.length();
-		boolean decimalHit = false;
+		int i,L = s.length(), sinceLastComma = 0;
+		boolean decimalHit = false, commaHit = false;
 		for (i = 0; i < L; i++) {
 			c = s.charAt(i);
 			if (c < '0' || c > '9') {
 				if (c == '.' && !decimalHit) {
 					decimalHit = true;
+					if (commaHit && sinceLastComma != 3) {
+						return false;
+					}
+					continue;
+				} else if (c == ',' && !decimalHit) {
+					if (commaHit) {
+						if (sinceLastComma != 3) {
+							return false;
+						}
+						sinceLastComma = 0;
+					}
+					commaHit = true;
 					continue;
 				}
 				return false;
+			} else {
+				if (commaHit) sinceLastComma++;
 			}
 		}
 		return true;
@@ -610,9 +785,13 @@ public class Helper {
 		}
 		return regex;
 	}
+	/* Main Method for tests */
 	public static void main(String args[]) {
+		System.out.println(Double.parseDouble("1330455.98"));
 		try { //C:\Users\Joe\Desktop\Projects\Rec
 			Workbook wb = ExcelUtils.openWorkbook(FileUtils.joinPath("C:","Users","Joe","Desktop","Projects","Rec","GS-SDI-Account_Balances_By_Currency-08_36_GMT-20140219-17040-0.html"));
+			Cell c = ExcelUtils.getCell(wb.getSheetAt(0),50,10,ExcelUtils.CELL_CREATE_NULL_AS_BLANK);
+			ExcelUtils.setCellFromString(c, "5555 Canary");
 			System.out.println(ExcelUtils.saveWorkbook(wb, "HTMLtest.xls", FileUtils.joinPath("C:","Users","Joe","Desktop","Projects","Rec"), false, true, true));
 		} catch (Exception e) {
 			// TODO Auto-generated catch block

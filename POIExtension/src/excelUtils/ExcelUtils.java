@@ -21,6 +21,8 @@
  *  Library aimed at extending the Apache POI Library
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * To do:
+ *      [ ] Copy Style methods
+ *      [ ] Figure out array formulas
  * 		[ ] Add regex search support
  * 		[ ] Add more thorough clearing methods
  * 		[ ] Add wrappers for Excel Based index usage
@@ -33,40 +35,87 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.DataFormat;
 import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.FormulaError;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 
+import excelUtils.Helper.HTMLNode;
+
 public class ExcelUtils {
 	public static boolean ROW_CREATE_NULL_AS_BLANK  = true;
 	public static boolean CELL_CREATE_NULL_AS_BLANK = true;
 
-	public static Sheet copySheetSection(Sheet originSheet,
+	public static Sheet copySheet(
+			Sheet originSheet,
+			Sheet destinationSheet) {
+		return copySheetSection(originSheet,-1,-1,-1,-1,destinationSheet,0,0,false);
+	}
+	public static Sheet copySheetValues(
+			Sheet originSheet,
+			Sheet destinationSheet) {
+		return copySheetSection(originSheet,-1,-1,-1,-1,destinationSheet,0,0,false,true);
+	}
+	public static Sheet copySheet(
+			Sheet originSheet,
+			Sheet destinationSheet,
+			boolean clearDestinationSheet) {
+		return copySheetSection(originSheet,-1,-1,-1,-1,destinationSheet,0,0,clearDestinationSheet);
+	}
+	public static Sheet copySheetValues(
+			Sheet originSheet,
+			Sheet destinationSheet,
+			boolean clearDestinationSheet) {
+		return copySheetSection(originSheet,-1,-1,-1,-1,destinationSheet,0,0,false,true);
+	}
+	public static Sheet copySheetSection(
+			Sheet originSheet,
 			int originRowStart, int originRowEnd,
 			int originColStart, int originColEnd,
 			Sheet destinationSheet) {
 		return copySheetSection(originSheet,originRowStart,originRowEnd,originColStart,originColEnd,destinationSheet,0,0,false);
 	}
-	public static Sheet copySheetSection(Sheet originSheet,
+	public static Sheet copySheetSection(
+			Sheet originSheet,
 			int originRowStart, int originRowEnd,
 			int originColStart, int originColEnd,
 			Sheet destinationSheet,boolean clearSection) {
 		return copySheetSection(originSheet,originRowStart,originRowEnd,originColStart,originColEnd,destinationSheet,0,0,clearSection);
 	}
-	public static Sheet copySheetSection(Sheet originSheet,
+	public static Sheet copySheetSection(
+			Sheet originSheet,
 			int originRowStart, int originRowEnd,
 			int originColStart, int originColEnd,
 			Sheet destinationSheet, int offsetRow, int offsetCol,
 			boolean clearSection) {
+		return copySheetSection(originSheet,originRowStart,originRowEnd,originColStart,originColEnd,destinationSheet,offsetRow,offsetCol,clearSection,false);
+	}
+	public static Sheet copySheetSection(
+			Sheet originSheet,
+			int originRowStart, int originRowEnd,
+			int originColStart, int originColEnd,
+			Sheet destinationSheet, int offsetRow, int offsetCol,
+			boolean clearSection, boolean copyValues) {
+		return copySheetSection(originSheet,originRowStart,originRowEnd,originColStart,originColEnd,destinationSheet,offsetRow,offsetCol,clearSection,false,copyValues);
+	}
+	public static Sheet copySheetSection(
+			Sheet originSheet,
+			int originRowStart, int originRowEnd,
+			int originColStart, int originColEnd,
+			Sheet destinationSheet, int offsetRow, int offsetCol,
+			boolean clearSection, boolean copyAll, boolean copyValues) {
 		if (originSheet == null || destinationSheet == null) return null;
 		if (clearSection) {
 			clearSheetSection(destinationSheet,originRowStart+offsetRow,originRowEnd+offsetRow,originColStart+offsetCol,originColEnd+offsetCol);
@@ -81,7 +130,7 @@ public class ExcelUtils {
 			for (j = originColStart; j <= originColEnd; j++) {
 				oc = getCell(originSheet,i,j);
 				dc = getCell(destinationSheet,i+offsetRow,j+offsetCol,CELL_CREATE_NULL_AS_BLANK);
-				copyCell(oc,dc);
+				copyCell(oc,dc,copyAll,copyValues);
 			}
 		}
 		return destinationSheet;
@@ -89,41 +138,67 @@ public class ExcelUtils {
 	public static Cell copyCell(Cell origin, Cell destination) {
 		return copyCell(origin,destination,true);
 	}
-	public static Cell copyCell(Cell origin, Cell destination, boolean copyAll) {
+	public static Cell copyCell(Cell origin, Cell destination,boolean copyAll) {
+		return copyCell(origin,destination,true,false);
+	}
+	public static Cell copyCell(Cell origin, Cell destination, boolean copyAll, boolean copyValue) {
 		if (origin == null || destination == null) return null;
 		int originType = origin.getCellType();
+		destination.setCellType(originType);
 		switch (originType) {
 		case Cell.CELL_TYPE_BLANK:
-			destination.setCellType(originType);
 			break;
 		case Cell.CELL_TYPE_BOOLEAN:
-			destination.setCellType(originType);
 			destination.setCellValue(origin.getBooleanCellValue());
 			break;
 		case Cell.CELL_TYPE_ERROR:
-			destination.setCellType(originType);
 			destination.setCellValue(origin.getErrorCellValue());
 			break;
 		case Cell.CELL_TYPE_FORMULA:
-			destination.setCellType(originType);
-			try {
-				destination.setCellFormula(origin.getCellFormula());
-				destination.setCellValue(origin.getCellFormula());
-			} catch (Exception e1) {
-				destination.setCellType(Cell.CELL_TYPE_ERROR);
-				destination.setCellErrorValue(FormulaError.NA.getCode());
+			if (copyValue) {
+				destination.setCellType((originType = origin.getCachedFormulaResultType()));
+				try {
+					switch (originType) {
+					case Cell.CELL_TYPE_BLANK:
+						destination.setCellValue(Cell.CELL_TYPE_STRING);
+						destination.setCellValue((String)null);
+						destination.setCellValue(Cell.CELL_TYPE_BLANK);
+						break;
+					case Cell.CELL_TYPE_BOOLEAN:
+						destination.setCellValue(origin.getBooleanCellValue());
+						break;
+					case Cell.CELL_TYPE_ERROR:
+						destination.setCellValue(origin.getErrorCellValue());
+						break;
+					case Cell.CELL_TYPE_NUMERIC:
+						destination.setCellValue(origin.getNumericCellValue());
+						break;
+					case Cell.CELL_TYPE_STRING:
+						destination.setCellValue(origin.getRichStringCellValue());
+						break;
+					}
+				} catch (Exception e) {
+					destination.setCellType(Cell.CELL_TYPE_ERROR);
+					destination.setCellErrorValue(FormulaError.NA.getCode());
+				}
+			} else {
+				try {
+					destination.setCellFormula(origin.getCellFormula());
+					destination.setCellValue(origin.getCellFormula());
+				} catch (Exception e1) {
+					destination.setCellType(Cell.CELL_TYPE_ERROR);
+					destination.setCellErrorValue(FormulaError.NA.getCode());
+				}
 			}
 			break;
 		case Cell.CELL_TYPE_NUMERIC:
 			try {
-				destination.setCellType(origin.getCellType());
-				if ( DateUtil.isValidExcelDate(origin.getNumericCellValue()) && 
+				if ( DateUtil.isValidExcelDate(origin.getNumericCellValue() ) && 
 						( DateUtil.isCellDateFormatted(origin) || DateUtil.isCellInternalDateFormatted(origin) )) {
 					Date originDate = origin.getDateCellValue();
 					try {
 						destination.setCellType(Cell.CELL_TYPE_NUMERIC);
 						destination.setCellValue(DateUtil.getExcelDate(originDate));
-						//destination.setCellStyle(dateCellStyle);
 						break;
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -133,44 +208,26 @@ public class ExcelUtils {
 						break;
 					}
 				}
-				try {
-					destination.setCellType(Cell.CELL_TYPE_NUMERIC);
-					destination.setCellValue(origin.getNumericCellValue());
-				} catch (IllegalStateException e) {
-					/* Handle problematic numeric cell value */
-
-					/* Strategy below is to see if the value can be extracted by placing an 
-					 * unlikely canary number and seeing if it comes out the other end */
-
-					/*
-					long cv = -1974621803; // large random pandigital number to assert error
-					try {
-						cv = (long)origin.getNumericCellValue();
-					} catch (IllegalStateException e1) {
-						cv = Long.parseLong(origin.getStringCellValue());
-						destination.setCellType(Cell.CELL_TYPE_BLANK);
-						destination.setCellValue((String)null);
-					}
-					if (cv == -1974621803) {
-						// failed
-						// pass
-						destination.setCellType(Cell.CELL_TYPE_BLANK);
-						destination.setCellValue((String)null);
-					} else {
-						destination.setCellValue(cv);
-					}
-					 */
-					throw e;
-				}
-				/* Ensure the cell is properly formatted */
-				//destination.setCellStyle(numberCellStyle);
+				destination.setCellType(Cell.CELL_TYPE_NUMERIC);
+				destination.setCellValue(origin.getNumericCellValue());
 			} catch (Exception e) {
-				//e.printStackTrace();
+				try {
+					destination.setCellType(Cell.CELL_TYPE_STRING);
+					destination.setCellErrorValue(FormulaError.NA.getCode());
+				} catch (Exception ex) {
+					destination.setCellType(Cell.CELL_TYPE_ERROR);
+					destination.setCellErrorValue(FormulaError.NA.getCode());
+				}
 			}
 			break;
 		case Cell.CELL_TYPE_STRING:
-			destination.setCellType(originType);
-			destination.setCellValue(origin.getStringCellValue());
+			try {
+				destination.setCellType(originType);
+				destination.setCellValue(origin.getRichStringCellValue());
+			} catch (Exception e) {
+				destination.setCellType(originType);
+				destination.setCellValue(origin.getStringCellValue());	
+			}
 			break;
 		}
 		if (copyAll) {
@@ -206,8 +263,7 @@ public class ExcelUtils {
 		}
 		return destination;
 	}
-	public static void copyCell() {
-
+	public static void copyCellStyle(Cell origin, Cell destination, boolean copyAll) {
 	}
 	/* Clearing methods */
 	public static Cell clearCell(Cell c) {
@@ -274,7 +330,7 @@ public class ExcelUtils {
 		if (s == null) return null;
 		Row r = getRow(s,row,create_null_as_blank);
 		if (r == null) return null; 
-		
+
 		return create_null_as_blank ? getCell(r,col,create_null_as_blank) : getCell(r,col);
 	}
 	public static Cell getCell(Row r, int col) {
@@ -773,7 +829,7 @@ public class ExcelUtils {
 		}
 		return true;
 	}
-	
+
 	/* Column methods */
 	public static int getFirstColNum(Sheet s) {
 		int col = Integer.MAX_VALUE;
@@ -1060,56 +1116,9 @@ public class ExcelUtils {
 			} else {
 				delimChar = '\t';
 			}
-			int textCols = 0;
-			int i = 0, j = 0;
-			wb = new HSSFWorkbook();
-			Sheet s = wb.createSheet();Row r;Cell c;
-			String line;
-			ArrayList<String> parsedCSVLine;
-			BufferedReader reader = new BufferedReader(new FileReader(file));
-			while ((line = reader.readLine()) != null) {
-				parsedCSVLine = Helper.parseCSVLine(line,delimChar,quotChar);
-				textCols = parsedCSVLine.size();
-				r = s.getRow(i);
-				if (r == null ) {
-					r = s.createRow(i);
-				}
-				for (j = 0; j < textCols; j++) {
-					c = r.getCell(j, Row.CREATE_NULL_AS_BLANK);
-
-					if (c == null ) {
-						c = r.createCell(j,Cell.CELL_TYPE_BLANK);
-					}
-
-					try {
-						if (Helper.isNumeric(parsedCSVLine.get(j))) {
-							double val = Double.parseDouble(parsedCSVLine.get(j));
-							c.setCellType(Cell.CELL_TYPE_NUMERIC);
-							c.setCellValue(val);
-						} else if (Helper.isDate(parsedCSVLine.get(j))) {
-							String date = Helper.parseDate(parsedCSVLine.get(j));
-							c.setCellType(Cell.CELL_TYPE_STRING);
-							c.setCellValue(date);
-						} else {
-							c.setCellType(Cell.CELL_TYPE_STRING);
-							c.setCellValue(parsedCSVLine.get(j));
-						}
-					} catch (Exception e) {
-						c.setCellType(Cell.CELL_TYPE_STRING);
-						c.setCellValue(parsedCSVLine.get(j));
-					}
-				}
-				i++;
-			}
-			reader.close();
+			wb = CSVToExcel(file,delimChar,quotChar);
 		} else if (isHTML) {
-			BufferedReader reader = new BufferedReader(new FileReader(file));
-			String line, html = "";
-			while ((line = reader.readLine()) != null) {
-				html += line;
-			}
-			reader.close();
-			Helper.printHTML(Helper.parseHTML(html));
+			wb = HTMLToExcel(file);
 		} else if (isExcel) {
 			wb = WorkbookFactory.create(file);
 		} else {
@@ -1117,7 +1126,149 @@ public class ExcelUtils {
 		}
 		return wb;
 	}
+	public static Cell setCellFromString(Cell c, String value) {
+		try {
+			if (value.length() == 0) {
+				c.setCellType(Cell.CELL_TYPE_BLANK);
+			} else if (Helper.isNumeric(value)) {
+				double val = Double.parseDouble(value.replace(""+',', ""));
+				c.setCellType(Cell.CELL_TYPE_NUMERIC);
+				c.setCellValue(val);
+			} else if (Helper.isDate(value)) {
+				String date = Helper.parseDate(value);
+				c.setCellType(Cell.CELL_TYPE_STRING);
+				c.setCellValue(date);
+			} else {
+				c.setCellType(Cell.CELL_TYPE_STRING);
+				c.setCellValue(value);
+			}
+		} catch (Exception e) {
+			c.setCellType(Cell.CELL_TYPE_STRING);
+			c.setCellValue(value);
+		}
+		return c;
+	}
+	public static Workbook CSVToExcel(File file, char delimChar, char quotChar) throws IOException {
+		int i = 0, j = 0;
+		Workbook wb = new HSSFWorkbook();
+		Sheet s = wb.createSheet();
+		Cell c;
+		String line,value;
+		ArrayList<String> parsedCSVLine;
+		BufferedReader reader = new BufferedReader(new FileReader(file));
+		while ((line = reader.readLine()) != null) {
+			parsedCSVLine = Helper.parseCSVLine(line,delimChar,quotChar);
+			for (j = 0; j < parsedCSVLine.size(); j++) {
+				c = getCell(s,i,j,CELL_CREATE_NULL_AS_BLANK);
+				value = parsedCSVLine.get(j);
+				c = setCellFromString(c,value);
+			}
+			i++;
+		}
+		reader.close();
+		return wb;
+	}
+	public static Workbook HTMLToExcel(File file) throws IOException {
+		BufferedReader reader = new BufferedReader(new FileReader(file));
+		String line, html = "";
+		while ((line = reader.readLine()) != null) {
+			html += line;
+		}
+		reader.close();
+		Helper.HTMLNode htmlNode = Helper.parseHTML(html);
+		Workbook wb = new HSSFWorkbook();
+		Sheet ws = wb.createSheet();
+		Helper.HTMLNode body = Helper.searchHTML(htmlNode,"body");
+		ws = convertHTMLToExcel(ws,body);
+		//		ArrayList<ArrayList<String>> sheet = Helper.flattenHTML(body);
+		//		int i, j;
+		//		Sheet s = wb.createSheet();Cell c;
+		//		for (i = 0; i < sheet.size(); i++) {
+		//			for (j = 0; j < sheet.get(i).size(); j++) {
+		//				c = getCell(s,i,j,ExcelUtils.CELL_CREATE_NULL_AS_BLANK);
+		//				setCellFromString(c,sheet.get(i).get(j));
+		//			}
+		//		}
+		return wb;
+	}
+	public static Sheet convertHTMLToExcel(Sheet ws, HTMLNode node) {
+		return flattenHTML(ws,node,0,0,"");
+	}
+	public static Sheet flattenHTML(Sheet ws, HTMLNode node, int row, int col,String style) {
+		if (node != null) {
+
+			if (node.tag.equalsIgnoreCase("body")) {
+				ws = flattenHTML(ws,node.firstChild,row,col,style);
+			} else if (node.tag.equalsIgnoreCase("table")) {
+				ws = flattenHTML(ws,node.firstChild,row,col,style);
+			} else if (node.tag.equalsIgnoreCase("tr")) {
+				ws = flattenHTML(ws,node.firstChild,row,col,style);
+				ws = flattenHTML(ws,node.firstNeighbor,row+1,col,style);
+			} else if (node.tag.equalsIgnoreCase("td")) {
+				ws = flattenHTML(ws,node.firstChild,row,col,style+ " " + parseStyle(node.attr));
+				ws = flattenHTML(ws,node.firstNeighbor,row,col+1,style);
+			} else {
+				String cellValue = Helper.HTMLToString(node);
+				String formatString = parseDataFormat(style);
+				Cell c = getCell(ws,row,col,CELL_CREATE_NULL_AS_BLANK);
+				CellStyle cs = ws.getWorkbook().createCellStyle();
+				// Set Any Stylings
+				if (node.tag.equalsIgnoreCase("b")) {
+					Font cf = ws.getWorkbook().createFont();
+					cf.setBoldweight(Font.BOLDWEIGHT_BOLD);
+					cs.setFont(cf);
+				}
+				if (style.contains("format")) {
+					DataFormat df = ws.getWorkbook().createDataFormat();
+					cs.setDataFormat(df.getFormat(formatString));
+					int cellType;
+					c.setCellType(cellType = getCellTypeFromFormatString(formatString));
+					try {
+						if (cellType == Cell.CELL_TYPE_NUMERIC) {
+							c.setCellValue(Double.parseDouble(cellValue.replace(",", "")));
+						} else {
+							c.setCellValue(cellValue);
+						}
+					} catch (Exception e) {
+						clearCell(c);
+						c.setCellType(Cell.CELL_TYPE_STRING);
+						c.setCellValue(cellValue);
+					}
+				} else {
+					setCellFromString(c,cellValue);
+				}
+				c.setCellStyle(cs);
+			}
+		}
+		return ws;
+	}
+	private static String parseDataFormat(String style) {
+		int n;
+		String ref_style = style.toLowerCase();
+		return Helper.safeSubstring(style, (n = ref_style.indexOf(':',ref_style.indexOf("format"))+1), Helper.minPos(ref_style.indexOf('\"'),ref_style.indexOf(' ',n)));
+	}
+	private static String parseStyle(String attr) {
+		int n;
+		String ref_attr = attr.toLowerCase();
+		return Helper.safeSubstring(attr, (n = ref_attr.indexOf('\"',ref_attr.indexOf("style"))+1), Helper.minPos(ref_attr.indexOf('\"',n),ref_attr.indexOf(' ',n)));
+	}
+	private static int getCellTypeFromFormatString(String format) {
+		if (format.equalsIgnoreCase("text") || format.equalsIgnoreCase("@") || format.equalsIgnoreCase("General")) {
+			return Cell.CELL_TYPE_STRING;
+		} else {
+			return Cell.CELL_TYPE_NUMERIC;
+		}
+	}
 	/* Handle saving workbook */
+	public static boolean saveWorkbook(Workbook wb, String path) {
+		try {
+			File f = new File(path);
+			System.out.println(f.getName() + f.getCanonicalPath());
+			return saveWorkbook(wb,f.getName(),FileUtils.shortenPath(f.getCanonicalPath(),-1),true,true,true);
+		} catch (Exception e) {
+			return false;
+		}
+	}
 	public static boolean saveWorkbook(Workbook wb, String filename, String filepath, boolean makeDirs, boolean overwrite, boolean setForceFormulaRecalculation) throws Exception {
 		// if directories in the path do not exist, create them
 		if (makeDirs) {
@@ -1153,5 +1304,22 @@ public class ExcelUtils {
 			throw e;
 		}
 	}
+	public static String[] getSheetNames(String filepath) {
+		try {
+			return getSheetNames(openWorkbook(filepath));
+		} catch (Exception e) {
+			return null;
+		}
+	}
+	public static String[] getSheetNames(Workbook wb) {
+		if (wb == null) { return null; }
+		int N;
+		String[] sheetNames = new String[(N = wb.getNumberOfSheets())];
+		for (int i = 0; i < N; i++) {
+			sheetNames[i] = wb.getSheetName(i);
+		}
+		return sheetNames;
+	}
+	/* Main Method for tests */
 	public static void main(String args[]) {}
 }

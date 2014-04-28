@@ -43,164 +43,159 @@ public class FileUtils {
 		return getExt(file.getName());
 	}
 	public static String getExt(String filename) {
-		int i;
-		String buf = "";
-		boolean noExtFound = true;
-		for (i = 0; i < filename.length(); i++) {
-			if (filename.charAt(i) == '.') {
-				buf = "";
-				noExtFound = false;
-			}
-			buf += filename.charAt(i);
+		int n = filename.lastIndexOf('.');
+		if (n > 0) {
+			return filename.substring(n+1);
 		}
-		if (noExtFound) {
-			return null;
-		}
-		return buf;
+		return null;
 	}
 	public static String parseExt(File file) {
 		return parseExt(file.getName());
 	}
-
 	public static String parseExt(String filename) {
-		int i;
-		String buf = "", parsedFilename = "";
-		boolean noExtFound = true;
-		for (i = 0; i < filename.length(); i++) {
-			if (filename.charAt(i) == '.' && i > 0) {
-				parsedFilename += buf;
-				buf ="";
-				noExtFound = false;
-			}
-			buf += filename.charAt(i);
+		int n = filename.lastIndexOf('.');
+		if (n > 0) {
+			return filename.substring(n+1);
 		}
-		if (noExtFound) {
-			parsedFilename += buf;
-		}
-		return parsedFilename;
+		return filename;
+	}
+	public static String removeExt(File file) {
+		return parseExt(file);
+	}
+	public static String removeExt(String filename) {
+		return parseExt(filename);
 	}
 	public static boolean hasProperExt(String filename) {
-		String ext = getExt(filename);
-		if (ext == null) {
-			return false;
-		}
-		if (ext.equals(".xls") || ext.equals(".xlsx") ) {
-			return true;
-		}
-		return false;
+		return filename.toLowerCase().endsWith(".xls") || filename.toLowerCase().endsWith(".xlsx");
 	}
 	/* File Location Methods */
 	public static File locateAndOpenFile(String filename) throws Exception {
-		return locateAndOpenFile(filename,getPWD(),0,false,true,false,null);
+		return locateAndOpenFile(filename,getPWD(),0,false,true,false,null,true);
 	}
-	public static File locateAndOpenFile(String filename,String path,String msg) throws Exception {
-		return locateAndOpenFile(filename,path,0,false,true,false,msg);
+	public static File locateAndOpenFile(String filename,String path,String slug) throws Exception {
+		return locateAndOpenFile(filename,path,0,false,true,false,slug,true);
 	}
-	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,String msg) throws Exception {
-		return locateAndOpenFile(filename,path,0,matchPartial,true,false,msg);
+	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,String slug) throws Exception {
+		return locateAndOpenFile(filename,path,0,matchPartial,true,false,slug,true);
 	}
-	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,boolean recursive,String msg) throws Exception {
-		return locateAndOpenFile(filename,path,0,matchPartial,recursive,false,msg);
+	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,String slug,boolean offerOptOut) throws Exception {
+		return locateAndOpenFile(filename,path,0,matchPartial,true,false,slug,offerOptOut);
 	}
-	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,boolean recursive,boolean makedirs,String msg) throws Exception {
-		return locateAndOpenFile(filename,path,0,matchPartial,recursive,makedirs,msg);
+	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,boolean recursive,String slug) throws Exception {
+		return locateAndOpenFile(filename,path,0,matchPartial,recursive,false,slug,true);
 	}
-	public static File locateAndOpenFile(String filename, String path, int level,boolean matchPartial,boolean recursive,boolean makedirs, String msg) throws Exception {
+	public static File locateAndOpenFile(String filename,String path,boolean matchPartial,boolean recursive,boolean makedirs,String slug) throws Exception {
+		return locateAndOpenFile(filename,path,0,matchPartial,recursive,makedirs,slug,true);
+	}
+	public static File locateAndOpenFile(String filename, String path, int level,boolean matchPartial,boolean recursive,boolean makedirs, String slug,boolean offerOptOut) throws Exception {
+		String msg = "Locate correct '" + slug + "' file";
 		File locatedFile = null;
 		String curFileName;
 		File dir = new File(path);
-		if (!dir.exists()) {return null;}
-		ArrayList<File> subDirs = new ArrayList<File>(); 
-		dir.mkdirs();
-		if (level == 0) {
-			filename = parseExt(filename);
-		}
-		for (File curFile: dir.listFiles()) {
-			if (curFile.exists()) {
-				if (recursive && curFile.isDirectory()) {
-					subDirs.add(curFile);
+		if (dir.exists()) {
+			ArrayList<File> subDirs = new ArrayList<File>(); 
+			dir.mkdirs();
+			if (level == 0) {
+				filename = parseExt(filename);
+			}
+			for (File curFile: dir.listFiles()) {
+				if (curFile.exists()) {
+					if (recursive && curFile.isDirectory()) {
+						subDirs.add(curFile);
+					}
+					if (curFile.isFile()) {
+						curFileName = parseExt(curFile.getName());
+						if (matchPartial) {
+							if (curFileName.toLowerCase().contains(filename.toLowerCase()) || 
+									filename.toLowerCase().contains(curFileName.toLowerCase())) {
+								locatedFile = curFile;
+								break;
+							}
+						} else {
+							if (curFileName.equals(filename)) {
+								locatedFile = curFile;
+								break;
+							}
+						}
+					}
 				}
-				if (curFile.isFile()) {
-					curFileName = parseExt(curFile.getName());
-					if (matchPartial) {
-						if (curFileName.toLowerCase().contains(filename.toLowerCase()) || 
-								filename.toLowerCase().contains(curFileName.toLowerCase())) {
-							locatedFile = curFile;
-							break;
-						}
-					} else {
-						if (curFileName.equals(filename)) {
-							locatedFile = curFile;
-							break;
-						}
+			}
+			if (locatedFile == null) {
+				for (File curFile: subDirs) { 
+					locatedFile = locateAndOpenFile(filename,curFile.getAbsolutePath(),level+1,matchPartial,recursive,makedirs,slug,offerOptOut);
+					if (locatedFile != null) {
+						break;
 					}
 				}
 			}
 		}
 		if (locatedFile == null && level == 0) {
 			/* Manual Location required */
-			locatedFile = manualLocate("Locate " + filename + "...");
-		} else if (locatedFile == null) {
-			for (File curFile: subDirs) { 
-				locatedFile = locateAndOpenFile(filename,curFile.getAbsolutePath(),level+1,matchPartial,recursive,makedirs,msg);
-				if (locatedFile != null) {
-					break;
-				}
+			int manLocate = JOptionPane.YES_OPTION;
+			if (offerOptOut) {
+				Object[] objs = {"Locate","Skip"};
+				manLocate = JOptionPane.showOptionDialog(null, "Could not automatically find " + slug + "file\nwould you like to locate the report manually?",
+						"File Not Found", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, objs, objs[0]);
+			}
+			if (manLocate == JOptionPane.YES_OPTION) {
+				locatedFile = manualLocate(path,msg);
 			}
 		}
 		return locatedFile;
 	}
 	/* File location by REGEX */
 	public static File locateAndOpenFileRegex(String regex) {
-		return locateAndOpenFileRegex(regex,getPWD(),true,"Locate file matching pattern: " + regex,false);
+		return locateAndOpenFileRegex(regex,getPWD(),true,"File matching pattern: " + regex,false);
 	}
 	public static File locateAndOpenFileRegex(String regex,boolean recursive) {
-		return locateAndOpenFileRegex(regex,getPWD(),recursive,"Locate file matching pattern: " + regex,false);
+		return locateAndOpenFileRegex(regex,getPWD(),recursive,"File matching pattern: " + regex,false);
 	}
-	public static File locateAndOpenFileRegex(String regex,boolean recursive, String msg) {
-		return locateAndOpenFileRegex(regex,getPWD(),recursive,msg,false);
+	public static File locateAndOpenFileRegex(String regex,boolean recursive, String slug) {
+		return locateAndOpenFileRegex(regex,getPWD(),recursive,slug,false);
 	}
 	public static File locateAndOpenFileRegex(String regex, String startingDirectory) {
-		return locateAndOpenFileRegex(regex,startingDirectory,true,"Locate file matching pattern: " + regex,false);
+		return locateAndOpenFileRegex(regex,startingDirectory,true,"File matching pattern: " + regex,false);
 	}
-	public static File locateAndOpenFileRegex(String regex, String startingDirectory, String msg) {
-		return locateAndOpenFileRegex(regex,startingDirectory,true,msg,false);
+	public static File locateAndOpenFileRegex(String regex, String startingDirectory, String slug) {
+		return locateAndOpenFileRegex(regex,startingDirectory,true,slug,false);
 	}
 	public static File locateAndOpenFileRegex(String regex, String startingDirectory, boolean recursive) {
-		return locateAndOpenFileRegex(regex,startingDirectory,recursive,"Locate file matching pattern: " + regex,false);
+		return locateAndOpenFileRegex(regex,startingDirectory,recursive,"File matching pattern: " + regex,false);
 	}
-	public static File locateAndOpenFileRegex(String regex, String startingDirectory, boolean recursive, String msg, boolean offerOptOut) {
+	public static File locateAndOpenFileRegex(String regex, String startingDirectory, boolean recursive, String slug, boolean offerOptOut) {
 		Pattern pattern = Pattern.compile(regex,Pattern.CASE_INSENSITIVE);
-		return locateAndOpenFileRegex(pattern,startingDirectory,recursive,msg,0,offerOptOut);
+		return locateAndOpenFileRegex(pattern,startingDirectory,recursive,slug,0,offerOptOut);
 	}
-	public static File locateAndOpenFileRegex(Pattern pattern, String startingDirectory, boolean recursive, String msg,int level,boolean offerOptOut) {
+	public static File locateAndOpenFileRegex(Pattern pattern, String startingDirectory, boolean recursive, String slug,int level,boolean offerOptOut) {
+		String msg = "Could not locate correct '" + slug + "' file.";
 		File locatedFile = null;
 		String curFileName;
 		File dir = new File(startingDirectory);
-		if (!dir.exists()) {return null;}
-		ArrayList<File> subDirs = new ArrayList<File>(); 
-		dir.mkdirs();
-		Matcher m;
-		for (File curFile: dir.listFiles()) {
-			if (curFile.exists()) {
-				if (curFile.isFile()) {
-					curFileName = curFile.getName();
-					m = pattern.matcher(curFileName);
-					if (m.find()) {
-						locatedFile = curFile;
-						break;
+		if (dir.exists()) {
+			ArrayList<File> subDirs = new ArrayList<File>(); 
+			dir.mkdirs();
+			Matcher m;
+			for (File curFile: dir.listFiles()) {
+				if (curFile.exists()) {
+					if (curFile.isFile()) {
+						curFileName = curFile.getName();
+						m = pattern.matcher(curFileName);
+						if (m.matches()) {
+							locatedFile = curFile;
+							break;
+						}
+					}
+					if (recursive && curFile.isDirectory()) {
+						subDirs.add(curFile);
 					}
 				}
-				if (recursive && curFile.isDirectory()) {
-					subDirs.add(curFile);
-				}
 			}
-		}
-		if (locatedFile == null) {
-			for (File curFile: subDirs) {
-				locatedFile = locateAndOpenFileRegex(pattern,curFile.getAbsolutePath(),recursive,msg,level+1,offerOptOut);
-				if (locatedFile != null) {
-					break;
+			if (locatedFile == null) {
+				for (File curFile: subDirs) {
+					locatedFile = locateAndOpenFileRegex(pattern,curFile.getAbsolutePath(),recursive,slug,level+1,offerOptOut);
+					if (locatedFile != null) {
+						break;
+					}
 				}
 			}
 		}
@@ -208,7 +203,9 @@ public class FileUtils {
 			int manLocate = JOptionPane.YES_OPTION;
 			if (offerOptOut) {
 				Object[] objs = {"Locate","Skip"};
-				manLocate = JOptionPane.showOptionDialog(null, "This report was not found, would you like to locate the report manually?", "File Not Found", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, objs, objs[0]);
+				manLocate = JOptionPane.showOptionDialog(null, "Unable to automatically find correct " + slug 
+						+ " file\nWould you like to locate the report manually?", 
+						"File Not Found", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, objs, objs[0]);
 			}
 			if (manLocate == JOptionPane.YES_OPTION) {
 				locatedFile = manualLocate(startingDirectory,msg);
@@ -267,9 +264,12 @@ public class FileUtils {
 		for (File curDir : startingDir.listFiles()) {
 			if (curDir.isDirectory()) {
 				if (ignoreCase ?
-						matchPartial ? curDir.getName().toLowerCase().contains(folderName.toLowerCase()) : curDir.getName().equalsIgnoreCase(folderName)
+						matchPartial ? 
+								curDir.getName().toLowerCase().contains(folderName.toLowerCase()) : curDir.getName().equalsIgnoreCase(folderName)
 								:
-									matchPartial ? curDir.getName().contains(folderName) : curDir.getName().equals(folderName)) {
+									matchPartial ? curDir.getName().contains(folderName) 
+											:
+												curDir.getName().equals(folderName)) {
 					return curDir;
 				}
 				if (recursive) {
@@ -344,11 +344,15 @@ public class FileUtils {
 				count++;
 				index = i+1;
 			}
-			if (count >= distance) {
+			if (count >= Math.abs(distance)) {
 				break;
 			}
 		}
-		return path.substring(index);
+		if (distance > 0) {
+			return path.substring(index);
+		} else {
+			return path.substring(0,index);
+		}
 	}
 	public static FileOutputStream getFileOutputStream(String path) throws IOException {
 		return getFileOutputStream(path,false,false);
@@ -379,11 +383,6 @@ public class FileUtils {
 		FileInputStream in = new FileInputStream(path);
 		return in;
 	}
-
-	
-	
 	/* Main Method for tests */
-	public static void main(String args[]) {
-		System.out.println();
-	}
+	public static void main(String args[]) {}
 }
